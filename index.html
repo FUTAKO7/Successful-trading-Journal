@@ -193,12 +193,13 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .tt-long{background:rgba(99,153,34,.2);color:var(--gl)}
 .tt-short{background:rgba(192,57,43,.2);color:var(--rl)}
 .tt-open{background:rgba(192,125,16,.25);color:var(--al)}
+.tt-spot{background:rgba(26,111,168,.25);color:var(--bl)}
 .ti-meta{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-top:2px;line-height:1.4}
 .ti-note{font-size:10px;color:var(--text2);margin-top:3px;line-height:1.45;font-style:italic}
-.ti-right{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.ti-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
 .ti-pnl{font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700}
-.ti-del{background:none;border:none;color:var(--text3);cursor:pointer;font-size:16px;padding:0 1px;line-height:1}
-.ti-del:active{color:var(--rl)}
+.ti-del{background:rgba(192,57,43,.1);border:1px solid rgba(192,57,43,.2);color:var(--rl);cursor:pointer;font-size:13px;padding:3px 8px;line-height:1;border-radius:5px;flex-shrink:0;font-family:'JetBrains Mono',monospace}
+.ti-del:active{background:rgba(192,57,43,.3)}
 .day-summary-line{font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);text-align:right;padding:2px 0 8px;border-bottom:1px solid var(--border);margin-bottom:9px}
 .empty-day{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);text-align:center;padding:9px 0;margin-bottom:8px}
 .form-section{background:var(--surface2);border:1px solid var(--border);border-radius:11px;padding:11px;margin-bottom:11px}
@@ -216,6 +217,7 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 .dir-btn{padding:8px 5px;border:1px solid var(--border2);border-radius:7px;background:var(--bg);color:var(--text2);font-family:'JetBrains Mono',monospace;font-size:11px;cursor:pointer;text-align:center}
 .dir-btn.al{border-color:var(--green);color:var(--gl);background:var(--gbg)}
 .dir-btn.as{border-color:var(--red);color:var(--rl);background:var(--rbg)}
+.dir-btn.asp{border-color:var(--blue);color:var(--bl);background:var(--bbg)}
 .open-toggle{display:flex;align-items:center;gap:6px;padding:8px 9px;background:var(--bg);border:1px solid var(--border2);border-radius:7px;cursor:pointer}
 .open-toggle.active{border-color:var(--amber);background:var(--abg)}
 .toggle-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);flex-shrink:0}
@@ -312,9 +314,10 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
       <div class="row2">
         <div class="field">
           <label>Direction</label>
-          <div class="dir-group">
+          <div class="dir-group" style="grid-template-columns:1fr 1fr 1fr">
             <div class="dir-btn al" id="dir-long" onclick="setDir('long')">&#8593; Long</div>
             <div class="dir-btn" id="dir-short" onclick="setDir('short')">&#8595; Short</div>
+            <div class="dir-btn" id="dir-spot" onclick="setDir('spot')">&#9679; Spot</div>
           </div>
         </div>
         <div class="field">
@@ -826,6 +829,7 @@ function setDir(dir){
   activeDir=dir;
   document.getElementById('dir-long').className='dir-btn'+(dir==='long'?' al':'');
   document.getElementById('dir-short').className='dir-btn'+(dir==='short'?' as':'');
+  document.getElementById('dir-spot').className='dir-btn'+(dir==='spot'?' asp':'');
 }
 function toggleOpen(){
   activeOpen=!activeOpen;
@@ -880,7 +884,8 @@ function renderTradeList(){
   html+=dd.trades.map((tr,i)=>{
     const p=parseFloat(tr.pnl)||0;
     const color=tr.open?'var(--al)':p>=0?'var(--gl)':'var(--rl)';
-    const dirTag=`<span class="ti-tag ${tr.dir==='long'?'tt-long':'tt-short'}">${tr.dir}</span>`;
+    const dirClass=tr.dir==='long'?'tt-long':tr.dir==='short'?'tt-short':'tt-spot';
+    const dirTag=`<span class="ti-tag ${dirClass}">${tr.dir}</span>`;
     let openTag='';
     if(tr.open){
       const diff=Math.max(0,Math.round((todayMs-startMs)/86400000));
@@ -896,7 +901,7 @@ function renderTradeList(){
       </div>
       <div class="ti-right">
         <div class="ti-pnl" style="color:${color}">${pStr}</div>
-        <button class="ti-del" onclick="deleteTrade(${i})">&#215;</button>
+        <button class="ti-del" onclick="deleteTrade(${i})" title="Delete trade">&#215;</button>
       </div>
     </div>`;
   }).join('');
