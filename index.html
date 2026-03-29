@@ -340,12 +340,26 @@ html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Syne',
 <div class="overlay" id="close-overlay">
   <div class="sheet" id="close-sheet">
     <div class="sheet-handle"></div>
-    <div class="sheet-title" style="margin-bottom:13px" id="close-sheet-title">Close Position</div>
+    <div class="sheet-title" style="margin-bottom:4px" id="close-sheet-title">Close Position</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text3);margin-bottom:13px" id="close-sheet-sub"></div>
     <div class="close-trade-form">
       <div class="close-trade-title">&#9889; Close this position</div>
       <div class="row2">
-        <div class="field"><label>Exit price</label><input id="c-exit" type="number" placeholder="45000.00" inputmode="decimal" step="any"/></div>
-        <div class="field"><label>Realized P&amp;L ($)</label><input id="c-pnl" type="number" placeholder="0.00" inputmode="decimal" step="any"/></div>
+        <div class="field"><label>Exit price ($)</label><input id="c-exit" type="number" placeholder="67888.00" inputmode="decimal" step="any"/></div>
+        <div class="field"><label>Spot amount held ($)</label><input id="c-spot" type="number" placeholder="e.g. 1000.00" inputmode="decimal" step="any"/></div>
+      </div>
+      <!-- Auto-calc preview -->
+      <div id="c-calc-preview" style="display:none;background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:10px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8px;color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px">Auto-calculated P&amp;L</div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <div id="c-calc-pnl" style="font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700"></div>
+          <div id="c-calc-pct" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--text3)"></div>
+        </div>
+        <div id="c-calc-detail" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--text3);margin-top:4px"></div>
+      </div>
+      <div class="field">
+        <label>Override P&amp;L (optional — leave blank to use auto)</label>
+        <input id="c-pnl" type="number" placeholder="Only fill if auto-calc is wrong" inputmode="decimal" step="any"/>
       </div>
       <div class="field"><label>Why I closed (profit target / stop / other)</label><textarea class="tall" id="c-reason" placeholder="e.g. Took profit early because RSI was overbought and momentum was fading. Didn't want to give back gains…"></textarea></div>
     </div>
@@ -926,25 +940,99 @@ document.getElementById('overlay').addEventListener('click',e=>{
 });
 
 // ── CLOSE POSITION SHEET ──────────────────────────────────────
+let closingTrade=null;
+
+function calcPnl(){
+  if(!closingTrade) return null;
+  const entry=parseFloat(closingTrade.entry)||0;
+  const exit=parseFloat(document.getElementById('c-exit').value)||0;
+  const spotAmt=parseFloat(document.getElementById('c-spot').value)||0;
+  if(!entry||!exit) return null;
+  const pctChange=(exit-entry)/entry;
+  // If spot dollar amount given, use that; else try size field as coin qty
+  let dollarPnl=null;
+  if(spotAmt>0){
+    // spot amount is how many dollars they had in the trade
+    const coinsHeld=spotAmt/entry;
+    dollarPnl=(exit-entry)*coinsHeld;
+  } else if(closingTrade.size){
+    // size might be like "0.5 BTC" — extract number
+    const qty=parseFloat(closingTrade.size);
+    if(!isNaN(qty)&&qty>0) dollarPnl=(exit-entry)*qty;
+  }
+  return {pctChange, dollarPnl, entry, exit};
+}
+
+function updateCalcPreview(){
+  const result=calcPnl();
+  const preview=document.getElementById('c-calc-preview');
+  if(!result){preview.style.display='none';return;}
+  const {pctChange,dollarPnl,entry,exit}=result;
+  preview.style.display='block';
+  const pnlEl=document.getElementById('c-calc-pnl');
+  const pctEl=document.getElementById('c-calc-pct');
+  const detailEl=document.getElementById('c-calc-detail');
+  const isLong=closingTrade.dir==='long';
+  const gain=isLong?pctChange:-pctChange;
+  const color=gain>=0?'var(--gl)':'var(--rl)';
+  pctEl.textContent=(gain>=0?'+':'')+( gain*100).toFixed(2)+'%';
+  pctEl.style.color=color;
+  if(dollarPnl!==null){
+    const adj=isLong?dollarPnl:-dollarPnl;
+    pnlEl.textContent=(adj>=0?'+$':'-$')+Math.abs(adj).toFixed(2);
+    pnlEl.style.color=color;
+    detailEl.textContent=`Entry $${entry.toLocaleString()} → Exit $${exit.toLocaleString()} · ${isLong?'long':'short'}`;
+  } else {
+    pnlEl.textContent=(gain>=0?'+':'')+( gain*100).toFixed(2)+'%';
+    pnlEl.style.color=color;
+    detailEl.textContent=`Enter spot amount held to get dollar P&L`;
+  }
+}
+
 function openCloseSheet(k,idx,sym){
   closingTradeKey=k;closingTradeIdx=idx;
+  closingTrade=getDayData(k).trades[idx]||null;
   document.getElementById('close-sheet-title').textContent=`Close: ${sym}`;
+  const sub=closingTrade?.entry?`Entry @ $${parseFloat(closingTrade.entry).toLocaleString()} · ${closingTrade.dir}`:'';
+  document.getElementById('close-sheet-sub').textContent=sub;
   document.getElementById('c-exit').value='';
+  document.getElementById('c-spot').value=closingTrade?.spotAmt||'';
   document.getElementById('c-pnl').value='';
   document.getElementById('c-reason').value='';
+  document.getElementById('c-calc-preview').style.display='none';
   document.getElementById('close-overlay').classList.add('open');
 }
 
+document.getElementById('c-exit').addEventListener('input',updateCalcPreview);
+document.getElementById('c-spot').addEventListener('input',updateCalcPreview);
+
 document.getElementById('btn-close-trade').addEventListener('click',()=>{
-  const pnl=document.getElementById('c-pnl').value;
   const exit=document.getElementById('c-exit').value;
   const reason=document.getElementById('c-reason').value.trim();
-  if(pnl==='') return;
+  const manualPnl=document.getElementById('c-pnl').value;
+  const spotAmt=document.getElementById('c-spot').value;
+  if(!exit&&!manualPnl) return;
+
+  // determine final P&L
+  let finalPnl=0;
+  if(manualPnl!==''){
+    finalPnl=parseFloat(manualPnl);
+  } else {
+    const result=calcPnl();
+    if(result&&result.dollarPnl!==null){
+      finalPnl=closingTrade.dir==='long'?result.dollarPnl:-result.dollarPnl;
+    } else if(result){
+      // no dollar amount — store pct as note, pnl=0 flagged
+      finalPnl=0;
+    }
+  }
+
   const dd=getDayData(closingTradeKey);
   if(dd.trades[closingTradeIdx]){
     dd.trades[closingTradeIdx].open=false;
-    dd.trades[closingTradeIdx].pnl=parseFloat(pnl);
+    dd.trades[closingTradeIdx].pnl=finalPnl;
     if(exit) dd.trades[closingTradeIdx].exit=exit;
+    if(spotAmt) dd.trades[closingTradeIdx].spotAmt=spotAmt;
     if(reason) dd.trades[closingTradeIdx].closeReason=reason;
     data[closingTradeKey]=dd;
   }
